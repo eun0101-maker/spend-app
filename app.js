@@ -196,9 +196,6 @@
       '<button type="button" class="btn pale" data-act="settings">' + svgx('<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-.9a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/>') + '설정</button>' +
       '<button type="button" class="btn pri add" data-act="add">' + svgx('<path d="M12 5v14M5 12h14"/>') + '추가</button></div></header>';
 
-    var need = needTotal();
-    if (need) h += '<button type="button" class="alert" data-act="ledger">가계부 기입이 필요한 결제 ' + need + '건 <span>· 눌러서 확인</span></button>';
-
     if (!data.cards.length && !data.items.length) {
       h += '<div class="empty"><p><b>아직 등록된 내용이 없어요.</b></p><p class="note" style="margin-top:6px">먼저 카드와 연결 통장을 등록하고, 예정 지출·고정 지출을 추가해 보세요.</p>' +
         '<button type="button" class="btn pri" data-act="settings">카드·통장 등록</button> <button type="button" class="btn pale" data-act="sample">샘플로 둘러보기</button></div>';
@@ -220,8 +217,9 @@
       '<div class="split"><div><div class="l">예정 지출</div><div class="v">' + won(st.planned) + '</div></div><div><div class="l">고정 지출</div><div class="v">' + won(st.fixed) + '</div></div></div></div>' +
       '<div><div class="bar" role="img" aria-label="결제 진행률 ' + pct + '%"><i style="width:' + pct + '%"></i></div>' +
       '<div class="legend"><span>결제 완료 ' + won(st.paid) + '</span><span>남은 금액 ' + won(st.unpaid) + (st.unpaidN ? ' (' + st.unpaidN + '건)' : '') + '</span></div></div></div>';
-    var groups = C.groupUpcoming(occs, data.cards);
-    s += nextCard(groups, T) + '</section>';
+    var groups = C.groupUpcoming(occs, data.cards).filter(function (g) { return g.date >= T; });
+    var need = needTotal();
+    s += '<div class="side">' + (need ? '<button type="button" class="alert" data-act="ledger">가계부 기입이 필요한 결제 ' + need + '건 <span>· 눌러서 확인</span></button>' : '') + nextCard(groups, T) + '</div></section>';
     return s;
   }
 
@@ -237,21 +235,32 @@
   }
 
   function nextCard(groups, T) {
-    if (!groups.length) return '<div class="next"><div class="lbl">다음 결제</div><div class="ttl">예정된 결제가 없어요</div><div class="note">모든 결제를 마쳤어요.</div></div>';
+    if (!groups.length) return '<div class="next"><div class="lbl">다음 결제</div><div class="ttl">예정된 결제가 없어요</div></div>';
     var g = groups[0], dd = C.diffDays(T, g.date);
-    var dtxt = dd < 0 ? (-dd) + '일 지남' : (dd === 0 ? '오늘' : 'D-' + dd);
-    var s = '<div class="next"><div class="lbl">다음 결제</div><div class="dd"><b>' + dtxt + '</b><span>' + C.mdw(g.date) + '</span></div>' +
-      '<div class="ttl">' + esc(groupTitle(g)) + '</div><div class="amt">' + won(g.total) + '</div>' +
-      (g.occs.length > 1 ? '<div class="names">' + groupNames(g) + '</div>' : '') + acctChip(g) +
-      '<div><button type="button" class="btn pri sm" data-act="paygroup" data-card="' + esc(g.cardId) + '" data-date="' + g.date + '">결제 완료</button></div>';
-    var rest = groups.slice(1, 4);
-    if (rest.length) {
-      s += '<div class="later">' + rest.map(function (x) {
-        var c = cardById(x.cardId);
-        return '<div><span>' + C.md(x.date) + ' ' + esc(c ? c.name : '카드 없음') + '</span><b>' + won(x.total) + '</b></div>';
-      }).join('') + '</div>';
-    }
-    return s + '</div>';
+    var dtxt = dd === 0 ? '오늘' : 'D-' + dd;
+    return '<div class="next" role="button" tabindex="0" data-act="nextgroup" data-card="' + esc(g.cardId) + '" data-date="' + g.date + '" aria-label="다음 결제 상세 열기">' +
+      '<div class="lbl">다음 결제</div><div class="dd"><b>' + dtxt + '</b><span>' + C.mdw(g.date) + '</span></div>' +
+      '<div class="ttl">' + esc(groupTitle(g)) + '</div>' +
+      '<div class="amtrow"><span class="amt">' + won(g.total) + '</span>' + acctChip(g) + '</div>' +
+      (g.occs.length > 1 ? '<div class="names">' + groupNames(g) + '</div>' : '') +
+      '<div class="hint">눌러서 결제 완료·기록</div></div>';
+  }
+  function dlgGroup(cardId, date) {
+    return function () {
+      var card = cardById(cardId);
+      var occs = C.allOcc(data, C.addDays(today(), 60)).filter(function (o) { return o.cardId === cardId && o.planned === date; });
+      var total = occs.reduce(function (a, o) { return a + o.amount; }, 0), open = occs.filter(function (o) { return !o.paid; }).length;
+      var rows = occs.map(function (o) {
+        var st = !o.paid ? '<button type="button" class="btn pale sm" data-act="pay" data-id="' + o.item.id + '" data-key="' + esc(o.key) + '">결제 완료</button>'
+          : '<button type="button" class="chip ' + (o.ledger ? 'ok' : 'need') + '" data-act="ledger1" data-id="' + o.item.id + '" data-key="' + esc(o.key) + '">' + (o.ledger ? '기입 완료' : '기입 필요') + '</button>';
+        return '<div class="lrow"><div class="nm"><b>' + esc(o.item.name) + '</b><span>' + won(o.amount) + ' · ' + (o.paid ? C.mdw(o.paid) + ' 결제' : '결제 전') + '</span></div>' + st +
+          '<button type="button" class="lnk" data-act="open" data-id="' + o.item.id + '">상세·기록</button></div>';
+      }).join('');
+      return '<div class="dh"><div><h2>' + esc(card ? card.name + ' 결제일' : '카드 없음') + '</h2><div class="note" style="margin-top:4px">' + C.mdw(date) + ' · ' + won(total) + '</div></div>' +
+        '<button type="button" class="x" data-act="close" aria-label="닫기">' + svgx('<path d="M6 6l12 12M18 6L6 18"/>') + '</button></div>' +
+        (card && card.account ? '<div style="margin-bottom:8px"><span class="acct soft">' + esc(card.account) + ' 잔액 확인</span></div>' : '') + rows +
+        '<div class="dact">' + (open > 1 ? '<button type="button" class="btn pale" data-act="paygroup" data-card="' + esc(cardId) + '" data-date="' + date + '">모두 결제 완료</button>' : '') + '<span class="sp"></span><button type="button" class="btn pri" data-act="close">닫기</button></div>';
+    };
   }
 
   function timelinePanel(occs, T) {
@@ -279,7 +288,8 @@
     if (it.kind === 'planned') {
       tags = '<span class="pill ' + (it.payType === 'once' ? 'once' : '') + '">' + (it.payType === 'once' ? '일시불' : '할부 ' + s.n + '개월' + (it.interestFree ? ' · 무이자' : '')) + '</span>' + cardTag(card) + need;
       amtb = '<div class="lbl">남은 금액</div><div class="num">' + won(s.remainAmt) + '</div><div class="sub">' + (it.payType === 'once' ? (next ? '결제 전' : '결제 완료') : '남은 ' + s.remainN + '회 / 총 ' + s.n + '회') + '</div>';
-      if (it.payType !== 'once') prog = '<div class="prog"><div class="bar2"><i style="width:' + Math.round(s.paidN / s.n * 100) + '%"></i></div><div class="t">' + s.paidN + '회 결제 · ' + won(s.paidAmt) + '</div></div>';
+      if (s.status === 'done') { amtb = ''; prog = '<div class="prog"><div class="t">' + s.paidN + '회 결제 · ' + won(s.paidAmt) + '</div></div>'; }
+      else if (it.payType !== 'once') prog = '<div class="prog"><div class="bar2"><i style="width:' + Math.round(s.paidN / s.n * 100) + '%"></i></div><div class="t">' + s.paidN + '회 결제 · ' + won(s.paidAmt) + '</div></div>';
       chip = next ? dchip(next.planned) : dchip('', true);
     } else {
       tags = '<span class="pill">고정 · 매월 ' + it.payDay + '일</span>' + cardTag(card) + need;
@@ -289,10 +299,10 @@
       chip = next ? dchip(next.planned) : '<span class="dchip done">종료</span>';
     }
     if (next) foot = '<div class="fd"><span class="lbl">다음 결제</span><span class="dt">' + C.mdw(next.planned) + '</span></div><button type="button" class="btn pri sm" data-act="pay" data-id="' + it.id + '" data-key="' + esc(next.key) + '">결제 완료</button>';
-    else foot = '<span class="paid-note">' + (it.kind === 'planned' ? '모두 결제 완료' : '종료됨') + '</span>';
-    return '<article class="item" data-act="open" data-id="' + it.id + '"><span class="ic">' + ico(it.icon) + '</span><span class="dch">' + chip + '</span>' +
+    else foot = '';
+    return '<article class="item" data-act="open" data-id="' + it.id + '"><span class="ic">' + ico('card') + '</span><span class="dch">' + chip + '</span>' +
       '<h3 class="ttl"><button type="button" data-act="open" data-id="' + it.id + '">' + esc(it.name) + '</button></h3><div class="tags">' + tags + '</div>' +
-      '<div class="amtb">' + amtb + '</div>' + prog + '<div class="foot">' + foot + '</div></article>';
+      (amtb ? '<div class="amtb">' + amtb + '</div>' : '') + prog + (foot ? '<div class="foot">' + foot + '</div>' : '') + '</article>';
   }
   function sortByNext(a, b, T) {
     var sa = C.summarize(a, T), sb = C.summarize(b, T);
@@ -332,7 +342,7 @@
     if (!occs.length) return;
     var snap = snapshot();
     occs.forEach(function (o) { C.setPaid(o.item, o.key, today()); });
-    commit(); toast(occs.length + '건 결제일 ' + C.md(today()) + ' 기록', function () { restore(snap); });
+    commit(); rerenderDlg(); toast(occs.length + '건 결제일 ' + C.md(today()) + ' 기록', function () { restore(snap); rerenderDlg(); });
   }
 
   /* ---------- 상세 ---------- */
@@ -357,7 +367,7 @@
         var fid = it.id + '-' + o.key;
         return '<div class="prow"><div class="pl">' + esc(label) + '</div>' +
           field('예정일', 'date', o.planned, 'planned', it.id, o.key, fid) + field('결제일', 'date', o.paid, 'paid', it.id, o.key, fid) + field('금액', 'number', o.amount, 'amount', it.id, o.key, fid) +
-          '<div class="pc">' + chip + link + '</div>' + memoField(it.id, o.key, o.memo, fid, '메모 (기입 안 한 이유 등)') + '</div>';
+          memoField(it.id, o.key, o.memo, fid) + '<div class="pc">' + chip + link + '</div></div>';
       }).join('');
       return '<div class="dh"><div><h2>' + esc(it.name) + '</h2><div class="dtags">' + tags + '</div></div><button type="button" class="x" data-act="close" aria-label="닫기">' + svgx('<path d="M6 6l12 12M18 6L6 18"/>') + '</button></div>' +
         '<div class="facts">' + facts + '</div>' + rows + (it.memo ? '<p class="memo">' + esc(it.memo) + '</p>' : '') +
@@ -365,8 +375,8 @@
         '<div class="dact"><button type="button" class="btn pale" data-act="edit" data-id="' + it.id + '">수정</button><button type="button" class="btn danger" data-act="del" data-id="' + it.id + '">삭제</button><span class="sp"></span><button type="button" class="btn pri" data-act="close">닫기</button></div>';
     };
   }
-  function memoField(id, key, val, fid, lab) {
-    return '<div class="pf pm"><label for="' + esc(fid + 'memo') + '"><span>' + lab + '</span></label><input class="in sm" type="text" maxlength="100" value="' + esc(val) + '" id="' + esc(fid + 'memo') + '" data-f="memo" data-id="' + id + '" data-key="' + esc(key) + '"></div>';
+  function memoField(id, key, val, fid) {
+    return '<div class="pf pm"><label for="' + esc(fid + 'memo') + '"><span>메모</span></label><textarea class="in memo-in" rows="2" maxlength="100" id="' + esc(fid + 'memo') + '" data-f="memo" data-id="' + id + '" data-key="' + esc(key) + '">' + esc(val) + '</textarea></div>';
   }
   function field(lab, type, val, f, id, key, fid) {
     var inp = type === 'number'
@@ -401,7 +411,7 @@
       h += '<form class="form" id="itemform" data-kind="' + kind + '" data-id="' + (id || '') + '" novalidate>';
       if (isNew) h += '<div class="seg" role="group" style="align-self:flex-start"><button type="button" data-act="kind" data-kind="planned" aria-pressed="' + (kind === 'planned') + '">예정 지출</button><button type="button" data-act="kind" data-kind="fixed" aria-pressed="' + (kind === 'fixed') + '">고정 지출</button></div>';
       h += '<div class="fld"><label for="f-name">이름</label><input class="in" id="f-name" name="name" required maxlength="60" value="' + esc(v.name || '') + '" autocomplete="off"></div>';
-      h += iconRadios(v.icon || 'card') + cardSelect(v.cardId || '');
+      h += cardSelect(v.cardId || '');
       if (kind === 'planned') {
         var s = it ? C.summarize(it, T) : null;
         h += '<div class="row2"><div class="fld"><label for="f-type">결제 방식</label><select class="in" id="f-type" name="payType"' + (it ? ' disabled' : '') + '><option value="installment"' + (v.payType !== 'once' ? ' selected' : '') + '>할부</option><option value="once"' + (v.payType === 'once' ? ' selected' : '') + '>일시불</option></select></div>';
@@ -461,8 +471,7 @@
     var kind = f.dataset.kind, id = f.dataset.id, err = $('#ferr'), T = today();
     function fail(m) { err.textContent = m; err.hidden = false; }
     var name = fv(f, 'name').trim(); if (!name) return fail('이름을 입력해 주세요.');
-    var icon = (f.querySelector('input[name="icon"]:checked') || {}).value || 'card';
-    var common = { name: name, icon: icon, cardId: fv(f, 'cardId'), category: fv(f, 'category') };
+    var common = { name: name, icon: 'card', cardId: fv(f, 'cardId'), category: fv(f, 'category') };
     if (!common.category) return fail('분류를 선택해 주세요.');
     var snap = snapshot();
     if (kind === 'planned') {
@@ -547,7 +556,7 @@
     rows.sort(function (a, b) { return a[1].paid < b[1].paid ? 1 : -1; });
     return '<div class="dh"><h2>가계부 기입이 필요한 결제</h2><button type="button" class="x" data-act="close" aria-label="닫기">' + svgx('<path d="M6 6l12 12M18 6L6 18"/>') + '</button></div>' +
       (rows.length ? rows.map(function (r) {
-        return '<div class="lrow lrow-m"><div class="nm"><b>' + esc(r[0].name) + '</b><span>' + C.mdw(r[1].paid) + ' 결제 · ' + won(r[1].amount) + '</span></div><button type="button" class="btn pale sm" data-act="ledger1" data-id="' + r[0].id + '" data-key="' + esc(r[1].key) + '">기입 완료</button>' + memoField(r[0].id, r[1].key, r[1].memo, 'lg-' + r[0].id + '-' + r[1].key, '메모 (기입 안 한 이유)') + '</div>';
+        return '<div class="lrow lrow-m"><div class="nm"><b>' + esc(r[0].name) + '</b><span>' + C.mdw(r[1].paid) + ' 결제 · ' + won(r[1].amount) + '</span></div>' + memoField(r[0].id, r[1].key, r[1].memo, 'lg-' + r[0].id + '-' + r[1].key) + '<button type="button" class="btn pale sm" data-act="ledger1" data-id="' + r[0].id + '" data-key="' + esc(r[1].key) + '">기입 완료</button></div>';
       }).join('') + '<div class="dact"><button type="button" class="btn pale" data-act="ledgerall">모두 기입 완료</button><span class="sp"></span><button type="button" class="btn pri" data-act="close">닫기</button></div>'
         : '<p class="note" style="padding:16px 0">모두 기입했어요 🎉</p><div class="dact"><span class="sp"></span><button type="button" class="btn pri" data-act="close">닫기</button></div>');
   }
@@ -602,6 +611,7 @@
       case 'open': openDlg(dlgDetail(id)); break;
       case 'close': closeDlg(); break;
       case 'pay': payOne(id, key); break;
+      case 'nextgroup': openDlg(dlgGroup(el.dataset.card, el.dataset.date)); break;
       case 'paygroup': payGroup(el.dataset.card, el.dataset.date); break;
       case 'ledger1': var it = itemById(id); if (it) { var o = C.occOf(it, C.addDays(today(), 45)).filter(function (x) { return x.key === key; })[0]; if (o) { C.setLedger(it, key, !o.ledger); commit(); rerenderDlg(); } } break;
       case 'ledger': openDlg(dlgLedger); break;
@@ -643,6 +653,9 @@
       case 'overwrite': overwriteMine(); break;
       case 'undo': if (ui.undo) { var u = ui.undo; ui.undo = null; $('#toast').hidden = true; u(); } break;
     }
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); }
   });
   document.addEventListener('change', function (e) {
     var t = e.target;

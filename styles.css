@@ -129,10 +129,10 @@ h1,h2,h3,p{margin:0}
 .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:var(--need);color:var(--need-ink)}
 
 /* 항목 카드 */
-.item{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"ic . dch" "ttl ttl ttl" "tags tags tags" "amt amt amt" "prog prog prog" "foot foot foot";gap:14px 8px;align-content:start;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px;box-shadow:var(--shadow);cursor:pointer}
+.item{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"ic ttl dch" "tags tags tags" "amt amt amt" "prog prog prog" "foot foot foot";gap:14px 8px;align-content:start;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px;box-shadow:var(--shadow);cursor:pointer}
 .item .ic{grid-area:ic;width:40px;height:40px;display:grid;place-items:center;background:var(--soft);border-radius:14px;color:#4E93D6}
 .item .dch{grid-area:dch;align-self:center}
-.item .ttl{grid-area:ttl;min-height:48px;font-size:17px;font-weight:700;line-height:1.4}
+.item .ttl{grid-area:ttl;align-self:center;min-height:0;font-size:17px;font-weight:700;line-height:1.4}
 .item .ttl button{all:unset;cursor:pointer;display:block}
 .item .ttl button:focus-visible{outline:3px solid var(--bar);outline-offset:3px;border-radius:6px}
 .item .tags{grid-area:tags;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -166,7 +166,7 @@ h1,h2,h3,p{margin:0}
 .facts .l{font-size:12px;color:var(--muted)}
 .facts .v{font-size:18px;font-weight:700;margin-top:2px}
 .facts .v.deep{color:var(--deep)}
-.prow{display:grid;grid-template-columns:72px 1fr 1fr 1fr auto;gap:10px;align-items:end;padding:12px 0;border-top:1px solid var(--line2)}
+.prow{display:grid;grid-template-columns:72px 1fr 1fr 1fr 1.5fr auto;gap:10px;align-items:end;padding:12px 0;border-top:1px solid var(--line2)}
 .prow:first-child{border-top:0}
 .prow .pl{font-weight:700;align-self:center}
 .pf{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -261,7 +261,27 @@ textarea.in{padding:10px 14px;min-height:72px;resize:vertical}
   .toast{bottom:calc(92px + env(safe-area-inset-bottom));white-space:normal;width:max-content;max-width:calc(100vw - 100px)}
 }
 
-.prow .pm{grid-column:2/-1}
-.lrow-m{flex-wrap:wrap;padding:10px 0}
-.lrow-m .pm{flex:1 0 100%}
 @media (max-width:899px){.prow .pm{grid-column:1/-1}}
+
+/* 2차 보정 */
+.side{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.side .next{flex:1 1 auto;cursor:pointer;padding:24px 28px;gap:8px}
+.side .next:hover{box-shadow:0 4px 16px rgba(70,120,170,.14)}
+.alert{border-radius:20px;line-height:1.35}
+.next .amtrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+.next .acct{align-self:center}
+.next .hint{font-size:12px;color:var(--muted);margin-top:2px}
+.memo-in{min-height:0;height:46px;padding:6px 10px;font-size:12px;line-height:1.4;resize:none}
+.lrow-m{flex-wrap:nowrap;gap:14px;padding:10px 0}
+.lrow-m .nm{order:1;flex:1 1 30%}
+.lrow-m .pm{order:2;flex:1.5 1 0;min-width:0}
+.lrow-m .btn{order:3;flex:none}
+.lrow .lnk{flex:none}
+@media (max-width:899px){
+  .side{flex-basis:100%}
+  .side .next{flex:0 0 auto;padding:20px}
+  .prow .pm{grid-column:1/-1}
+  .lrow-m{flex-wrap:wrap}
+  .lrow-m .pm{order:4;flex:1 0 100%}
+}
+textarea.in.memo-in{min-height:0;height:46px}
