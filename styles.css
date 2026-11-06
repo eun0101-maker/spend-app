@@ -260,3 +260,8 @@ textarea.in{padding:10px 14px;min-height:72px;resize:vertical}
 @media (max-width:899px){
   .toast{bottom:calc(92px + env(safe-area-inset-bottom));white-space:normal;width:max-content;max-width:calc(100vw - 100px)}
 }
+
+.prow .pm{grid-column:2/-1}
+.lrow-m{flex-wrap:wrap;padding:10px 0}
+.lrow-m .pm{flex:1 0 100%}
+@media (max-width:899px){.prow .pm{grid-column:1/-1}}

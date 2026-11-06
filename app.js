@@ -15,6 +15,7 @@
     gift: '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18"/><path d="M12 9c-3 0-4-4-1.5-4S12 9 12 9zm0 0c3 0 4-4 1.5-4S12 9 12 9z"/>',
     heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.5-7 10-7 10z"/>'
   };
+  var CATS = ['식비', '생활', '교통', '사회', '성장', '쇼핑', '여가', '덕질'];
   var ICON_NAMES = { card: '카드', bag: '쇼핑', ticket: '티켓', phone: '통신', play: '구독', home: '생활', gift: '선물', heart: '좋아요' };
 
   /* ---------- 작은 도구 ---------- */
@@ -202,7 +203,7 @@
       h += '<div class="empty"><p><b>아직 등록된 내용이 없어요.</b></p><p class="note" style="margin-top:6px">먼저 카드와 연결 통장을 등록하고, 예정 지출·고정 지출을 추가해 보세요.</p>' +
         '<button type="button" class="btn pri" data-act="settings">카드·통장 등록</button> <button type="button" class="btn pale" data-act="sample">샘플로 둘러보기</button></div>';
     } else {
-      h += hero(occs, T) + timelinePanel(occs, T) + cardSection(occs, T) + plannedSection(T) + fixedSection(T);
+      h += hero(occs, T) + timelinePanel(occs, T) + plannedSection(T) + fixedSection(T);
     }
     h += '<button type="button" class="fab" data-act="add" aria-label="추가">' + svgx('<path d="M12 5v14M5 12h14"/>') + '</button>';
     $('#app').innerHTML = h;
@@ -269,20 +270,6 @@
       '<div class="lg"><span><i style="background:var(--mint-dot)"></i>결제 완료</span><span><i style="background:var(--bar)"></i>예정</span><span><i style="background:var(--late-dot)"></i>지남</span></div></div>' +
       '<div class="tl-scroll"><div class="tl"><div class="track"></div><div class="past" style="width:' + tl.todayLeft.toFixed(2) + '%"></div>' +
       '<div class="today" style="left:' + tl.todayLeft.toFixed(2) + '%"><span>오늘</span><i></i></div>' + marks + '</div></div></section>';
-  }
-
-  function cardSection(occs, T) {
-    var groups = C.groupUpcoming(occs, data.cards), seen = {}, list = [];
-    groups.forEach(function (g) { if (!seen[g.cardId]) { seen[g.cardId] = 1; list.push(g); } });
-    if (!list.length) return '';
-    var tiles = list.map(function (g) {
-      var card = cardById(g.cardId), dd = C.diffDays(T, g.date);
-      return '<article class="tile"><div class="r1">' + (card ? cardTag(card) : '<span class="tag neutral">카드 없음</span>') + dchip(g.date) + '</div>' +
-        '<div><div class="small">' + esc(groupTitle(g)) + ' · ' + C.mdw(g.date) + '</div><div class="amt">' + won(g.total) + '</div></div>' +
-        '<div class="names">' + groupNames(g) + '</div>' + acctChip(g, true) +
-        '<div class="mt"><span>' + g.occs.length + '건 합산</span><button type="button" class="btn pale sm" data-act="paygroup" data-card="' + esc(g.cardId) + '" data-date="' + g.date + '">결제 완료</button></div></article>';
-    }).join('');
-    return '<section class="sec"><div class="sh"><h2>카드별 다음 결제</h2></div><div class="grid">' + tiles + '</div></section>';
   }
 
   function itemCard(it, T) {
@@ -370,13 +357,16 @@
         var fid = it.id + '-' + o.key;
         return '<div class="prow"><div class="pl">' + esc(label) + '</div>' +
           field('예정일', 'date', o.planned, 'planned', it.id, o.key, fid) + field('결제일', 'date', o.paid, 'paid', it.id, o.key, fid) + field('금액', 'number', o.amount, 'amount', it.id, o.key, fid) +
-          '<div class="pc">' + chip + link + '</div></div>';
+          '<div class="pc">' + chip + link + '</div>' + memoField(it.id, o.key, o.memo, fid, '메모 (기입 안 한 이유 등)') + '</div>';
       }).join('');
       return '<div class="dh"><div><h2>' + esc(it.name) + '</h2><div class="dtags">' + tags + '</div></div><button type="button" class="x" data-act="close" aria-label="닫기">' + svgx('<path d="M6 6l12 12M18 6L6 18"/>') + '</button></div>' +
         '<div class="facts">' + facts + '</div>' + rows + (it.memo ? '<p class="memo">' + esc(it.memo) + '</p>' : '') +
-        '<p class="note" style="margin-top:10px">예정일과 다른 날 결제했다면 결제일을 직접 바꿔 주세요. 남은 금액·회차는 자동으로 계산돼요.</p>' +
+        '<p class="note" style="margin-top:10px">예정일과 다른 날 결제했다면 결제일을 직접 바꿔 주세요. 남은 금액·회차는 자동으로 계산돼요. 회차 금액을 바꾸면 이후 미결제 회차가 전체 금액에 맞게 다시 나뉘어요.</p>' +
         '<div class="dact"><button type="button" class="btn pale" data-act="edit" data-id="' + it.id + '">수정</button><button type="button" class="btn danger" data-act="del" data-id="' + it.id + '">삭제</button><span class="sp"></span><button type="button" class="btn pri" data-act="close">닫기</button></div>';
     };
+  }
+  function memoField(id, key, val, fid, lab) {
+    return '<div class="pf pm"><label for="' + esc(fid + 'memo') + '"><span>' + lab + '</span></label><input class="in sm" type="text" maxlength="100" value="' + esc(val) + '" id="' + esc(fid + 'memo') + '" data-f="memo" data-id="' + id + '" data-key="' + esc(key) + '"></div>';
   }
   function field(lab, type, val, f, id, key, fid) {
     var inp = type === 'number'
@@ -395,6 +385,11 @@
     return '<div class="fld"><label for="f-card">결제 카드</label><select class="in" id="f-card" name="cardId"><option value="">카드 없음</option>' +
       data.cards.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === cur ? ' selected' : '') + '>' + esc(c.name) + ' (매월 ' + c.billingDay + '일)</option>'; }).join('') + '</select>' +
       (data.cards.length ? '' : '<span class="note">설정에서 카드·연결 통장을 먼저 등록하면 편해요.</span>') + '</div>';
+  }
+  function catSelect(cur) {
+    var opts = CATS.slice(); if (cur && opts.indexOf(cur) < 0) opts.push(cur);
+    return '<div class="fld"><label for="f-cat">분류</label><select class="in" id="f-cat" name="category" required><option value="">분류를 선택해 주세요</option>' +
+      opts.map(function (c) { return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>';
   }
   function dlgForm(kind, id) {
     return function () {
@@ -418,19 +413,22 @@
             '<div class="fld"><label for="f-paid">이미 결제한 회차</label><input class="in" id="f-paid" name="paidCount" type="number" inputmode="numeric" min="0" value="0"></div></div>' +
             '<div class="pv" id="pv" aria-live="polite"></div>';
         } else {
-          h += '<div class="fld"><label for="f-buy">구매일</label><input class="in" id="f-buy" name="buyDate" type="date" value="' + esc(v.buyDate || '') + '"></div></div>' +
-            '<p class="note">금액과 날짜는 상세 화면의 회차 목록에서 바꿀 수 있어요.</p>';
+          h += '<div class="fld"><label for="f-months">할부 개월</label><input class="in" id="f-months" name="months" type="number" inputmode="numeric" min="1" max="60" value="' + s.n + '"' + (v.payType === 'once' ? ' disabled' : '') + '></div></div>' +
+            '<div class="row2"><div class="fld"><label for="f-total">총 금액 (원)</label><input class="in" id="f-total" name="total" type="number" inputmode="numeric" min="1" step="1" value="' + s.total + '"></div>' +
+            '<div class="fld"><label for="f-buy">구매일</label><input class="in" id="f-buy" name="buyDate" type="date" value="' + esc(v.buyDate || '') + '"></div></div>' +
+            '<p class="note">총 금액·개월을 바꾸면 이미 결제한 회차는 그대로 두고, 남은 금액을 남은 회차에 다시 나눠요. 회차별 날짜·금액은 상세 화면에서 바꿀 수 있어요.</p>';
         }
-        h += '<label class="chk"><input type="checkbox" name="interestFree"' + (v.interestFree ? ' checked' : '') + '> 무이자 할부</label>';
+        h += '<label class="chk"><input type="checkbox" name="interestFree"' + ((isNew || v.interestFree) ? ' checked' : '') + '> 무이자 할부</label>';
       } else {
         h += '<div class="row2"><div class="fld"><label for="f-amt">매월 금액 (원)</label><input class="in" id="f-amt" name="amount" type="number" inputmode="numeric" min="1" step="1" value="' + esc(v.amount || '') + '"></div>' +
-          '<div class="fld"><label for="f-day">결제일 (매월 며칠)</label><input class="in" id="f-day" name="payDay" type="number" inputmode="numeric" min="1" max="31" value="' + esc(v.payDay || '') + '"></div></div>' +
+          '<div class="fld"><label for="f-day">결제일 (매월 며칠)</label><input class="in" id="f-day" name="payDay" type="number" inputmode="numeric" min="1" max="31" placeholder="예: 25" value="' + esc(v.payDay || '') + '"></div></div>' +
+          '<p class="note">고정 지출은 카드 결제일과 상관없이, 이 항목의 결제일로 관리해요.</p>' +
           '<div class="row2"><div class="fld"><label for="f-start">이용 시작일</label><input class="in" id="f-start" name="startDate" type="date" value="' + esc(v.startDate || T) + '"></div>' +
           '<div class="fld"><label for="f-end">종료일 (선택)</label><input class="in" id="f-end" name="endDate" type="date" value="' + esc(v.endDate || '') + '"></div></div>';
         if (isNew) h += '<label class="chk"><input type="checkbox" name="paidThisMonth"> 이번 달 이미 결제했어요</label><p class="note">이 앱을 쓰기 전의 결제 기록은 만들지 않고, 이번 달부터 관리해요.</p>';
       }
-      h += '<div class="fld"><label for="f-cat">분류 (선택)</label><input class="in" id="f-cat" name="category" maxlength="30" value="' + esc(v.category || '') + '"></div>' +
-        '<div class="fld"><label for="f-memo">메모 (선택)</label><textarea class="in" id="f-memo" name="memo" maxlength="300">' + esc(v.memo || '') + '</textarea></div>' +
+      h += catSelect(v.category || '') +
+        '<p class="note">메모는 상세 화면에서 결제 회차마다 입력해요.</p>' +
         '<div class="err" id="ferr" role="alert" hidden></div>' +
         '<div class="dact" style="margin-top:4px"><span class="sp"></span><button type="button" class="btn ghost" data-act="close">취소</button><button type="submit" class="btn pri">저장</button></div></form>';
       return h;
@@ -450,15 +448,13 @@
       var buy = fv(f, 'buyDate') || today();
       if (!formTouched || !fv(f, 'firstDate')) f.elements.firstDate.value = card ? C.firstPayDefault(card.billingDay, buy) : C.addMonths(buy, 1);
       var once = fv(f, 'payType') === 'once';
-      f.elements.months.disabled = once; f.elements.paidCount.disabled = once;
+      f.elements.months.disabled = once; f.elements.paidCount.disabled = once; f.elements.interestFree.disabled = once;
       var total = Number(fv(f, 'total')), n = once ? 1 : Math.max(2, parseInt(fv(f, 'months'), 10) || 2), first = fv(f, 'firstDate'), pv = $('#pv');
       if (!pv) return;
       if (!total || !first) { pv.textContent = '금액을 입력하면 회차별 금액이 계산돼요.'; return; }
       var ps = C.makePayments(total, n, first);
       pv.innerHTML = once ? '<b>' + won(total) + '</b> 일시불 · ' + C.mdw(first) + ' 결제 예정'
         : (ps[0].amount === ps[1].amount ? '월 <b>' + won(ps[0].amount) + '</b> × ' + n + '회' : '1회차 <b>' + won(ps[0].amount) + '</b>, 이후 <b>' + won(ps[1].amount) + '</b> × ' + (n - 1) + '회') + ' · 첫 결제 ' + C.mdw(first) + ' · 마지막 ' + C.mdw(ps[n - 1].planned);
-    } else if (!formTouched || !fv(f, 'payDay')) {
-      if (card && !formTouched) f.elements.payDay.value = card.billingDay;
     }
   }
   function submitForm(f) {
@@ -466,12 +462,21 @@
     function fail(m) { err.textContent = m; err.hidden = false; }
     var name = fv(f, 'name').trim(); if (!name) return fail('이름을 입력해 주세요.');
     var icon = (f.querySelector('input[name="icon"]:checked') || {}).value || 'card';
-    var common = { name: name, icon: icon, cardId: fv(f, 'cardId'), category: fv(f, 'category').trim(), memo: fv(f, 'memo').trim() };
+    var common = { name: name, icon: icon, cardId: fv(f, 'cardId'), category: fv(f, 'category') };
+    if (!common.category) return fail('분류를 선택해 주세요.');
     var snap = snapshot();
     if (kind === 'planned') {
       var ifree = f.elements.interestFree.checked;
       if (id) {
-        var it = itemById(id); Object.assign(it, common, { interestFree: ifree, buyDate: fv(f, 'buyDate') });
+        var it = itemById(id), ntotal = parseInt(fv(f, 'total'), 10), nmonths = parseInt(fv(f, 'months'), 10), cur = C.summarize(it, T);
+        if (!(ntotal > 0)) return fail('총 금액을 입력해 주세요.');
+        if (ntotal !== cur.total || (it.payType !== 'once' && nmonths !== cur.n)) {
+          var er = C.resizePlanned(it, ntotal, nmonths);
+          if (er === 'months') return fail('할부 개월은 이미 결제한 회차보다 많아야 해요.');
+          if (er === 'total') return fail('총 금액이 이미 결제한 금액보다 커야 해요.');
+          if (er === 'paid') return fail('이미 결제한 일시불은 상세 화면의 금액 칸에서 바꿔 주세요.');
+        }
+        Object.assign(it, common, { interestFree: ifree, buyDate: fv(f, 'buyDate') });
       } else {
         var once = fv(f, 'payType') === 'once', total = parseInt(fv(f, 'total'), 10), months = parseInt(fv(f, 'months'), 10), first = fv(f, 'firstDate');
         if (!(total > 0)) return fail('총 금액을 입력해 주세요.');
@@ -521,16 +526,16 @@
     var sh = { id: C.uid(), name: '신한 욜로', account: '신한 입출금통장', billingDay: 10, tone: 0 };
     var kb = { id: C.uid(), name: '국민 노리', account: '국민 입출금통장', billingDay: 12, tone: 1 };
     var cur = C.ymOf(T), d = Number(T.slice(8, 10));
-    var bn = C.createPlanned({ name: '보넥도 낙원2 부산 중콘', icon: 'ticket', cardId: sh.id, payType: 'installment', total: 55600, months: 4, firstDate: C.addMonths(nb10, -3), paidCount: 3, category: '콘서트' });
+    var bn = C.createPlanned({ name: '보넥도 낙원2 부산 중콘', icon: 'ticket', cardId: sh.id, payType: 'installment', total: 55600, months: 4, firstDate: C.addMonths(nb10, -3), paidCount: 3, category: '덕질' });
     bn.payments[2].ledger = false;
     var items = [
-      C.createPlanned({ name: '해리포터 금지된 숲', icon: 'bag', cardId: sh.id, payType: 'installment', total: 78000, months: 3, firstDate: nb10, interestFree: true, category: '굿즈' }),
+      C.createPlanned({ name: '해리포터 금지된 숲', icon: 'bag', cardId: sh.id, payType: 'installment', total: 78000, months: 3, firstDate: nb10, interestFree: true, category: '덕질' }),
       bn,
-      C.createPlanned({ name: '겨울 패딩', icon: 'bag', cardId: kb.id, payType: 'once', total: 189000, firstDate: nb12, category: '의류' }),
-      C.createFixed({ name: 'T 우주패스 (유튜브 프리미엄)', icon: 'play', cardId: kb.id, amount: 13900, payDay: 12, startDate: '2024-01-12', paidThisMonth: d >= 12 }, T),
-      C.createFixed({ name: '넷플릭스 프리미엄', icon: 'play', cardId: kb.id, amount: 10000, payDay: 12, startDate: '2024-03-12', paidThisMonth: d >= 12 }, T),
-      C.createFixed({ name: 'KT 통신비', icon: 'phone', cardId: kb.id, amount: 42000, payDay: 12, startDate: '2025-06-12', paidThisMonth: d >= 12 }, T),
-      C.createFixed({ name: '위버스 DM', icon: 'heart', cardId: sh.id, amount: 27000, payDay: 3, startDate: '2026-01-03', paidThisMonth: d >= 3 }, T)
+      C.createPlanned({ name: '겨울 패딩', icon: 'bag', cardId: kb.id, payType: 'once', total: 189000, firstDate: nb12, category: '쇼핑' }),
+      C.createFixed({ name: 'T 우주패스 (유튜브 프리미엄)', icon: 'play', cardId: kb.id, amount: 13900, payDay: 12, startDate: '2024-01-12', category: '여가', paidThisMonth: d >= 12 }, T),
+      C.createFixed({ name: '넷플릭스 프리미엄', icon: 'play', cardId: kb.id, amount: 10000, payDay: 20, startDate: '2024-03-20', category: '여가', paidThisMonth: d >= 20 }, T),
+      C.createFixed({ name: 'KT 통신비', icon: 'phone', cardId: kb.id, amount: 42000, payDay: 25, startDate: '2025-06-25', category: '생활', paidThisMonth: d >= 25 }, T),
+      C.createFixed({ name: '위버스 DM', icon: 'heart', cardId: sh.id, amount: 27000, payDay: 3, startDate: '2026-01-03', category: '덕질', paidThisMonth: d >= 3 }, T)
     ];
     data.cards = [sh, kb]; data.items = items; ui.month = cur;
   }
@@ -542,7 +547,7 @@
     rows.sort(function (a, b) { return a[1].paid < b[1].paid ? 1 : -1; });
     return '<div class="dh"><h2>가계부 기입이 필요한 결제</h2><button type="button" class="x" data-act="close" aria-label="닫기">' + svgx('<path d="M6 6l12 12M18 6L6 18"/>') + '</button></div>' +
       (rows.length ? rows.map(function (r) {
-        return '<div class="lrow"><div class="nm"><b>' + esc(r[0].name) + '</b><span>' + C.mdw(r[1].paid) + ' 결제 · ' + won(r[1].amount) + '</span></div><button type="button" class="btn pale sm" data-act="ledger1" data-id="' + r[0].id + '" data-key="' + esc(r[1].key) + '">기입 완료</button></div>';
+        return '<div class="lrow lrow-m"><div class="nm"><b>' + esc(r[0].name) + '</b><span>' + C.mdw(r[1].paid) + ' 결제 · ' + won(r[1].amount) + '</span></div><button type="button" class="btn pale sm" data-act="ledger1" data-id="' + r[0].id + '" data-key="' + esc(r[1].key) + '">기입 완료</button>' + memoField(r[0].id, r[1].key, r[1].memo, 'lg-' + r[0].id + '-' + r[1].key, '메모 (기입 안 한 이유)') + '</div>';
       }).join('') + '<div class="dact"><button type="button" class="btn pale" data-act="ledgerall">모두 기입 완료</button><span class="sp"></span><button type="button" class="btn pri" data-act="close">닫기</button></div>'
         : '<p class="note" style="padding:16px 0">모두 기입했어요 🎉</p><div class="dact"><span class="sp"></span><button type="button" class="btn pri" data-act="close">닫기</button></div>');
   }
@@ -646,8 +651,10 @@
       var f = t.dataset.f, val = t.value, patch = {};
       if (f === 'amount') { var n = Number(val); if (val === '' || isNaN(n) || n < 0) { rerenderDlg(); return; } patch.amount = Math.round(n); }
       else if (f === 'planned') { if (!val) { rerenderDlg(); return; } patch.planned = val; }
+      else if (f === 'memo') patch.memo = val.trim();
       else patch.paid = val;
-      C.editOcc(it, t.dataset.key, patch); commit();
+      var rebal = C.editOcc(it, t.dataset.key, patch); commit();
+      if (rebal) toast('이후 회차 금액을 자동으로 다시 나눴어요');
       setTimeout(rerenderDlg, 0); return;
     }
     if (t.dataset && t.dataset.cf) {

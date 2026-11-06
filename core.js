@@ -56,7 +56,7 @@
     var rem = total - base * n;
     var out = [];
     for (var i = 0; i < n; i++) {
-      out.push({ seq: i + 1, planned: addMonths(firstDate, i), paid: '', amount: base + (i === 0 ? rem : 0), ledger: false });
+      out.push({ seq: i + 1, planned: addMonths(firstDate, i), paid: '', amount: base + (i === 0 ? rem : 0), ledger: false, memo: '' });
     }
     return out;
   };
@@ -100,13 +100,13 @@
       var rec = byYm[ym];
       var planned = rec ? rec.planned : dateInYm(ym, item.payDay);
       if (item.endDate && planned > item.endDate && !(rec && rec.paid)) break;
-      out.push({ itemId: item.id, key: ym, planned: planned, paid: rec ? (rec.paid || '') : '', amount: rec ? rec.amount : item.amount, ledger: rec ? !!rec.ledger : false, virtual: !rec });
+      out.push({ itemId: item.id, key: ym, planned: planned, paid: rec ? (rec.paid || '') : '', amount: rec ? rec.amount : item.amount, ledger: rec ? !!rec.ledger : false, memo: rec ? (rec.memo || '') : '', virtual: !rec });
     }
     return out;
   };
   var plannedOcc = function (item) {
     return item.payments.map(function (p) {
-      return { itemId: item.id, key: String(p.seq), planned: p.planned, paid: p.paid || '', amount: p.amount, ledger: !!p.ledger, virtual: false };
+      return { itemId: item.id, key: String(p.seq), planned: p.planned, paid: p.paid || '', amount: p.amount, ledger: !!p.ledger, memo: p.memo || '', virtual: false };
     });
   };
   var occOf = function (item, upto) { return item.kind === 'fixed' ? fixedOcc(item, upto) : plannedOcc(item); };
@@ -201,7 +201,7 @@
   var ensureRec = function (item, ym) {
     var rec = item.payments.filter(function (p) { return p.ym === ym; })[0];
     if (!rec) {
-      rec = { ym: ym, planned: dateInYm(ym, item.payDay), paid: '', amount: item.amount, ledger: false };
+      rec = { ym: ym, planned: dateInYm(ym, item.payDay), paid: '', amount: item.amount, ledger: false, memo: '' };
       item.payments.push(rec);
     }
     return rec;
@@ -217,11 +217,59 @@
     if (!date) r.ledger = false;
   };
   var setLedger = function (item, key, on) { var r = recOf(item, key); if (r && r.paid) r.ledger = !!on; };
+  // total을 count개로 나눈다 (나머지는 앞 회차부터 1원씩이 아니라 첫 회차에 몰아줌)
+  var distribute = function (total, count) {
+    var base = Math.floor(total / count), out = [];
+    for (var i = 0; i < count; i++) out.push(base + (i === 0 ? total - base * count : 0));
+    return out;
+  };
+  // 한 회차 금액을 바꾸면, 이후 미결제 회차가 있을 때 전체 금액이 유지되도록 이후 회차를 다시 나눈다. 다시 나눴으면 true
+  var setAmount = function (item, key, amount) {
+    var r = recOf(item, key); if (!r) return false;
+    var old = r.amount; r.amount = amount;
+    if (item.kind !== 'planned') return false;
+    var later = item.payments.filter(function (p) { return p.seq > r.seq && !p.paid; });
+    if (!later.length) return false;
+    var pool = later.reduce(function (s, p) { return s + p.amount; }, 0) + (old - amount);
+    if (pool < 0) return false;
+    var parts = distribute(pool, later.length);
+    later.forEach(function (p, i) { p.amount = parts[i]; });
+    return true;
+  };
+  // 예정 지출의 총액/개월 수정: 결제 완료한 회차는 그대로 두고 남은 금액을 남은 회차에 다시 나눈다. 문제가 있으면 오류 문자열 반환
+  var resizePlanned = function (item, total, months) {
+    if (item.kind !== 'planned') return 'kind';
+    var pays = item.payments;
+    if (item.payType === 'once') { if (pays[0].paid) return 'paid'; pays[0].amount = total; return ''; }
+    var n = months | 0;
+    if (n < 2) return 'months';
+    var paid = pays.filter(function (p) { return p.paid; });
+    var paidAmt = paid.reduce(function (s, p) { return s + p.amount; }, 0);
+    var k = n - paid.length;
+    if (k < 1) return 'months';
+    if (total - paidAmt <= 0) return 'total';
+    var unpaid = pays.filter(function (p) { return !p.paid; });
+    var drop = unpaid.length - k;
+    for (var d = 0; d < drop; d++) pays.splice(pays.lastIndexOf(unpaid[unpaid.length - 1 - d]), 1);
+    for (var a = 0; a < -drop; a++) {
+      var last = pays[pays.length - 1];
+      pays.push({ seq: 0, planned: addMonths(last.planned, 1), paid: '', amount: 0, ledger: false, memo: '' });
+    }
+    pays.forEach(function (p, i) { p.seq = i + 1; });
+    var open = pays.filter(function (p) { return !p.paid; });
+    var parts = distribute(total - paidAmt, open.length);
+    open.forEach(function (p, i) { p.amount = parts[i]; });
+    return '';
+  };
+  // 반환값: true면 이후 회차 금액을 자동으로 다시 나눴다는 뜻
   var editOcc = function (item, key, patch) {
-    var r = recOf(item, key); if (!r) return;
+    var r = recOf(item, key); if (!r) return false;
+    var rebalanced = false;
     if (patch.planned) r.planned = patch.planned;
-    if (typeof patch.amount === 'number' && patch.amount >= 0) r.amount = patch.amount;
+    if (typeof patch.amount === 'number' && patch.amount >= 0) rebalanced = setAmount(item, key, patch.amount);
+    if (typeof patch.memo === 'string') r.memo = patch.memo.slice(0, 100);
     if (Object.prototype.hasOwnProperty.call(patch, 'paid')) setPaid(item, key, patch.paid);
+    return rebalanced;
   };
 
   root.Core = {
@@ -231,7 +279,7 @@
     makePayments: makePayments, createPlanned: createPlanned, createFixed: createFixed,
     fixedOcc: fixedOcc, plannedOcc: plannedOcc, occOf: occOf, allOcc: allOcc, eff: eff,
     summarize: summarize, groupUpcoming: groupUpcoming, timeline: timeline, monthStats: monthStats,
-    setPaid: setPaid, setLedger: setLedger, editOcc: editOcc
+    setPaid: setPaid, setLedger: setLedger, editOcc: editOcc, setAmount: setAmount, resizePlanned: resizePlanned, distribute: distribute
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.Core;
 })(typeof window !== 'undefined' ? window : globalThis);

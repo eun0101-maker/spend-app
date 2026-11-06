@@ -1,5 +1,5 @@
 /* 앱 파일만 캐시합니다. GitHub API(개인 데이터) 요청은 절대 캐시하지 않아요. */
-var CACHE = 'spend-v1';
+var CACHE = 'spend-v2';
 var FILES = ['./', 'index.html', 'styles.css', 'core.js', 'app.js', 'qrcode.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) {
